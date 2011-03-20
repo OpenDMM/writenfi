@@ -1,0 +1,15 @@
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.log
+config.status
+configure
+depcomp
+install-sh
+missing
+.deps/
+*.o
+src/writenfi
+stamp-h1
+writenfi_config.h*
