@@ -328,11 +328,13 @@ int main(int argc, char **argv)
 			memset(sector, 0xFF, n->sector_size+n->spare_size);
 			if (current_stage != 1) {
 				 /* generate jffs2 empty block */
-				if (!((i >> 9) & 31))
-					memcpy(sector + n->sector_size + ((n->spare_size == 16) ? 8 : 2), "\x19\x85\x20\x03\x00\x00\x00\x08", 8);
+				if (!(i % n->erase_block_size)) {
+					unsigned int offset = (n->sector_size == 512) ? 8 : 2;
+					memcpy(sector + n->sector_size + offset, "\x19\x85\x20\x03\x00\x00\x00\x08", 8);
+				}
 			}
 		}
-		
+
 		if (!nand_write_sector(n, i, sector)) {
 			printf("\n!!! write failed at %08x\n", i);
 			goto restoreoob;
