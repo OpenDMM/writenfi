@@ -240,15 +240,14 @@ int main(int argc, char **argv)
 	{
 		int have_badblock = 0;
 		unsigned char oob[n->spare_size];
-		if (nand_read_spare(n, i, oob))
+		if (!nand_read_spare(n, i, oob))
 			goto restoreoob;
 		if (oob[n->bad_block_pos] != 0xFF)
 			have_badblock = 1;
-		if (nand_read_spare(n, i + n->sector_size, oob))
+		if (!nand_read_spare(n, i + n->sector_size, oob))
 			goto restoreoob;
 		if (oob[n->bad_block_pos] != 0xFF)
 			have_badblock = 1;
-		have_badblock = 0;
 		if (have_badblock)
 		{
 			printf(" %08x", i); fflush(stdout);
@@ -265,8 +264,6 @@ int main(int argc, char **argv)
 	i = 0;
 	while (1)
 	{
-		int res;
-
 		int have_badblock = 0;
 
 		if (i >= ntohl(part[current_stage-1]))
@@ -295,22 +292,20 @@ int main(int argc, char **argv)
 		if (!(i % n->erase_block_size))  /* at each eraseblock */
 		{
 ///			printf("%08x / %08x - %d - %08x / %08x\n", i, part[current_stage-1], current_stage, data_ptr, stage_size[current_stage]);
-			if (nand_read_spare(n, i, oob))
+			if (!nand_read_spare(n, i, oob))
 				goto restoreoob;
 
 			if (oob[n->bad_block_pos] != 0xFF)
 				have_badblock = 1;
-			if (nand_read_spare(n, i + n->sector_size, oob))
+			if (!nand_read_spare(n, i + n->sector_size, oob))
 				goto restoreoob;
 			if (oob[n->bad_block_pos] != 0xFF)
 				have_badblock = 1;
 
 			if (!have_badblock)
 			{
-				res = nand_erase_page(n, i);
-				if (res & 1)
-				{
-					printf("\n!!! erase failed at %08x: %02x\n", i, res);
+				if (!nand_erase_page(n, i)) {
+					printf("\n!!! erase failed at %08x\n", i);
 					goto restoreoob;
 				}
 			}
@@ -338,10 +333,8 @@ int main(int argc, char **argv)
 			}
 		}
 		
-		res = nand_write_sector(n, i, sector);
-		if (res & 1)
-		{
-			printf("\n!!! write failed at %08x: %02x\n", i, res);
+		if (!nand_write_sector(n, i, sector)) {
+			printf("\n!!! write failed at %08x\n", i);
 			goto restoreoob;
 		}
 
