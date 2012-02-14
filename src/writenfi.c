@@ -110,6 +110,7 @@ int main(int argc, char **argv)
 	unsigned char *dst;
 	struct stat st;
 	int fd;
+	int hw_ecc=0; // 0 = no hw ecc, 1 = hw ecc not for 2nd stage, 2 = hw ecc for all
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s <filename.nfi>\n", argv[0]);
@@ -118,7 +119,7 @@ int main(int argc, char **argv)
 
 	filename = argv[1];
 
-	printf("*** raw flash write tool. Don't have bad sectors or it won't work.\n");
+	printf("*** raw flash write tool. Don't have unknown bad sectors or it won't work.\n");
 	printf("*** uncompressing..."); fflush(stdout);
 
 	fd = open(filename, O_RDONLY);
@@ -152,7 +153,13 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (memcmp(mem, "NFI1", 4)) {
+	n = nand_open();
+	if (n == NULL) {
+		fprintf(stderr, "Could not open NAND\n");
+		goto err;
+	}
+
+	if (memcmp(mem, "NFI", 3)) {
 		fprintf(stderr, "no NFI header found... abort flashing!\n");
 		goto err;
 	}
@@ -163,6 +170,17 @@ int main(int argc, char **argv)
 		goto err;
 	}
 
+	if (!strcmp(model, "dm800") || !strcmp(model, "dm500hd") || !strcmp(model, "dm800se"))
+		hw_ecc = 1;
+	else if (!strcmp(model, "dm7025") || !strcmp(model, "dm8000"))
+		;
+	else if (!strcmp(model, "dm7020hd"))
+		hw_ecc = 2;
+	else {
+		fprintf(stderr, "unsupported model %s!\n", model);
+		goto err;
+	}
+
 	if (strncmp(model, (const char *)(mem + 4), 28)) {
 		fprintf(stderr, "nfi file not for this platform... abort flashing!\n");
 		goto err;
@@ -170,9 +188,16 @@ int main(int argc, char **argv)
 
 	printf(" ok!\n");
 
-	n = nand_open();
-	if (n == NULL) {
-		fprintf(stderr, "Could not open NAND\n");
+	/*
+	 * check if this model supports this image
+	 * (DM7020HD only supports images with NFI2 header)
+	 *
+	 */
+	if (!strncmp((const char *)mem, "NFI1", 4) && hw_ecc != 2)
+		hw_ecc = 0; // NFI1 images not use hw ecc
+	else if (strncmp((const char*)mem, "NFI2", 4) || hw_ecc < 1) {
+		fprintf(stderr, "%c%c%c%c is no valid header for %s ...abort flashing!\n",
+			mem[0], mem[1], mem[2], mem[3], model);
 		goto err;
 	}
 
@@ -266,6 +291,8 @@ int main(int argc, char **argv)
 	{
 		int have_badblock = 0;
 
+		int do_write = 1;
+
 		if (i >= ntohl(part[current_stage-1]))
 		{
 //			printf("i >= %d (%d)\n", current_stage, part[current_stage-1]);
@@ -324,18 +351,37 @@ int main(int argc, char **argv)
 		if (data_ptr < stage_size[current_stage]) {
 			memcpy(sector, dst + stage_offset[current_stage] + data_ptr, n->sector_size + n->spare_size);
 			data_ptr += n->sector_size + n->spare_size;
-		} else {
-			memset(sector, 0xFF, n->sector_size+n->spare_size);
-			if (current_stage != 1) {
-				 /* generate jffs2 empty block */
-				if (!(i % n->erase_block_size)) {
-					unsigned int offset = (n->sector_size == 512) ? 8 : 2;
-					memcpy(sector + n->sector_size + offset, "\x19\x85\x20\x03\x00\x00\x00\x08", 8);
+			if (hw_ecc > 1 || (current_stage > 1 && hw_ecc))
+			{
+				int x=0;
+				for (; x < n->spare_size; x += 16)
+				{
+					/*
+					 * force hw ecc bytes always to 0xFF
+					 * this only works for broadcom hamming hw ECC
+					 * this is needed on 7020hd because buildimage calcs for the 2nd stage loader
+					 * a soft ecc... but the 7020hd use hardware ecc for all
+					 *
+					 */
+
+/*					if (sector[n->sector_size+x+6] != 0xFF || sector[n->sector_size+x+7] != 0xFF || sector[n->sector_size+x+8] != 0xFF)
+					{
+						fprintf(stdout, "ECC bytes wrong at addr %08x/%d -> %02x %02x %02x\n", i, x,
+							sector[n->sector_size+x+6], sector[n->sector_size+x+7], sector[n->sector_size+x+8]);
+					}*/
+
+					sector[n->sector_size+x+6] = 0xFF;
+					sector[n->sector_size+x+7] = 0xFF;
+					sector[n->sector_size+x+8] = 0xFF;
 				}
 			}
+		} else {
+			memset(sector, 0xFF, n->sector_size+n->spare_size);
+			if (current_stage != 1)
+				do_write = 0; // its not needed to write jffs2 emtpy blocks...
 		}
 
-		if (!nand_write_sector(n, i, sector)) {
+		if (do_write && !nand_write_sector(n, i, sector)) {
 			printf("\n!!! write failed at %08x\n", i);
 			goto restoreoob;
 		}
