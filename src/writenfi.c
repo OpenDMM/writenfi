@@ -190,12 +190,22 @@ int main(int argc, char **argv)
 
 	/*
 	 * check if this model supports this image
-	 * (DM7020HD only supports images with NFI2 header)
+	 * (DM7020HD with older flash type supports only images with NFI2 header, with new flash type only NFI3)
 	 *
 	 */
 	if (!strncmp((const char *)mem, "NFI1", 4) && hw_ecc != 2)
 		hw_ecc = 0; // NFI1 images not use hw ecc
-	else if (strncmp((const char*)mem, "NFI2", 4) || hw_ecc < 1) {
+	else if (!strncmp((const char*)mem, "NFI2", 4) && hw_ecc == 2 && n->erase_block_size != 256*1024) {
+		fprintf(stderr, "you need a %s image with 128K erase block size (NFI3 header) ...abort flashing!\n",
+			model);
+		goto err;
+	}
+	else if (!strncmp((const char*)mem, "NFI3", 4) && hw_ecc == 2 && n->erase_block_size != 128*1024) {
+		fprintf(stderr, "you need a %s image with 256K erase block size (NFI2 header) ...abort flashing!\n",
+			model);
+		goto err;
+	}
+	else if ((strncmp((const char*)mem, "NFI2", 4) && strncmp((const char*)mem, "NFI3", 4)) || hw_ecc < 1) {
 		fprintf(stderr, "%c%c%c%c is no valid header for %s ...abort flashing!\n",
 			mem[0], mem[1], mem[2], mem[3], model);
 		goto err;
