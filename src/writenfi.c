@@ -112,9 +112,65 @@ int main(int argc, char **argv)
 	int fd;
 	int hw_ecc=0; // 0 = no hw ecc, 1 = hw ecc not for 2nd stage, 2 = hw ecc for all
 
-	if (argc != 2) {
+	model = file_getline("/proc/stb/info/model");
+	if (model == NULL) {
+		fprintf(stderr, "/proc/stb/info/model doesn't exist... abort flashing!");
+		goto err;
+	}
+
+	if (argc < 2) {
 		fprintf(stderr, "usage: %s <filename.nfi>\n", argv[0]);
 		return EXIT_FAILURE;
+	}
+	else if (!strcmp(argv[1], "--buildimage-params")) {
+		int brcmnand = strcmp(model, "dm7025") && strcmp(model, "dm8000");
+		int hwecc = !strcmp(model, "dm7020hd");
+
+		if (argc < 3) {
+			fprintf(stderr, "usage: --buildimage-params filename_2nd [filename_boot filename_root]\n");
+			return EXIT_FAILURE;
+		}
+
+		n = nand_open(1);
+		if (n == NULL) {
+			fprintf(stderr, "Could not open NAND\n");
+			goto err;
+		}
+
+		fprintf(stdout, "%s%s --arch %s -e 0x%x -s %d -b 0x%x:%s",
+			brcmnand ? "--brcmnand " : "",
+			hwecc ? "--hw-ecc" : "",
+			model,
+			n->erase_block_size,
+			n->sector_size,
+			n->flash_size,
+			argv[2]);
+
+		if (argc > 3) {
+			n = nand_open(2);
+			if (n == NULL) {
+				fprintf(stderr, "Could not open NAND\n");
+				goto err;
+			}
+			fprintf(stdout, " -d 0x%x:%s",
+				n->flash_size,
+				argv[3]);
+		}
+
+		if (argc > 4) {
+			n = nand_open(3);
+			if (n == NULL) {
+				fprintf(stderr, "Could not open NAND\n");
+				goto err;
+			}
+			fprintf(stdout, " -d 0x%x:%s",
+				n->flash_size,
+				argv[3]);
+		}
+
+		fflush(stdout);
+
+		return 0;
 	}
 
 	filename = argv[1];
@@ -153,20 +209,14 @@ int main(int argc, char **argv)
 		}
 	}
 
-	n = nand_open();
-	if (n == NULL) {
-		fprintf(stderr, "Could not open NAND\n");
-		goto err;
-	}
-
 	if (memcmp(mem, "NFI", 3)) {
 		fprintf(stderr, "no NFI header found... abort flashing!\n");
 		goto err;
 	}
 
-	model = file_getline("/proc/stb/info/model");
-	if (model == NULL) {
-		fprintf(stderr, "/proc/stb/info/model doesn't exist... abort flashing!");
+	n = nand_open(0);
+	if (n == NULL) {
+		fprintf(stderr, "Could not open NAND\n");
 		goto err;
 	}
 

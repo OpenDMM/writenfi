@@ -57,15 +57,22 @@ static bool nand_get_info(struct nand *n)
 	return true;
 }
 
-struct nand *nand_open(void)
+struct nand *nand_open(int device)
 {
 	static struct nand n;
+	char device1[10];
+	char device2[11];
 
-	n.fd = open("/dev/mtd0", O_RDWR);
+	snprintf(device1, 10, "/dev/mtd%d", device);
+	snprintf(device2, 11, "/dev/mtd/%d", device);
+
+	n.fd = open(device1, O_RDWR);
 	if (n.fd < 0) {
-		n.fd = open("/dev/mtd/0", O_RDWR);
+		n.fd = open(device2, O_RDWR);
 		if (n.fd < 0) {
-			perror("/dev/mtd0 or /dev/mtd/0");
+			char tmp[30];
+			snprintf(tmp, 30, "%s or %s", device1, device2);
+			perror(tmp);
 			return NULL;
 		}
 	}

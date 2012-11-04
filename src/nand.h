@@ -12,7 +12,7 @@ struct nand {
 	size_t sector_size;
 };
 
-struct nand *nand_open(void);
+struct nand *nand_open(int device);
 bool nand_erase_page(struct nand *n, unsigned int addr);
 bool nand_write_sector(struct nand *n, unsigned int addr, const unsigned char *data);
 bool nand_read_spare(struct nand *n, unsigned int addr, unsigned char *data);
