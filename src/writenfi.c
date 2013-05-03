@@ -353,6 +353,15 @@ int main(int argc, char **argv)
 
 		int do_write = 1;
 
+		/*
+		 * the broadcom nand driver resizes the mtd partitions because of the
+		 * bad block and the correctable error table at the end ...
+		 * but our partition sizes in the nfi header are raw sized ...
+		 *
+		 */
+		if (i >= n->flash_size)
+			break;
+
 		if (i >= ntohl(part[current_stage-1]))
 		{
 //			printf("i >= %d (%d)\n", current_stage, part[current_stage-1]);
