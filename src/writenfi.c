@@ -344,7 +344,7 @@ int main(int argc, char **argv)
 	else
 		printf(" none\n");
 
-	printf("*** writing"); fflush(stdout);
+	printf("*** writing "); fflush(stdout);
 
 	i = 0;
 	while (1)
@@ -462,7 +462,7 @@ int main(int argc, char **argv)
 			if (wr == 59)
 			{
 				wr = 0;
-				printf("\n           ");
+				printf("\n                 ");
 			}
 		}
 		
